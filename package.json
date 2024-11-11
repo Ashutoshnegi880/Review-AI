@@ -2,7 +2,9 @@
   "name": "review-ai",
   "displayName": "Review-AI",
   "description": "Select the piece of code and use genAI to review to the code and get suggestion.",
-  "version": "0.0.1",
+  "publisher": "AshutoshSinghNegi",
+  "icon": "images/review-ai-icon.png",
+  "version": "0.0.2",
   "engines": {
     "vscode": "^1.95.0"
   },
