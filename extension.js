@@ -84,7 +84,10 @@ class SidebarProvider {
               progress.report({ increment: 100 });
 
               showSuggestionsInNewFile(suggestions);
-			  this.webviewView.webview.postMessage({ command: 'showMarkdown', markdown: suggestions });
+              this.webviewView.webview.postMessage({
+                command: "showMarkdown",
+                markdown: suggestions,
+              });
             }
           );
           // Here you can process or send `inputText` and `selectedText`
@@ -98,40 +101,68 @@ class SidebarProvider {
 
   getHtmlForWebview(webview) {
     return `<!DOCTYPE html>
-      <html lang="en">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Extension Sidebar</title>
-      </head>
-      <body>
-        <h3>Custom Coding Standards(if any):</h3>
-        <textarea id="inputText" style="width:100%; height:100px;"></textarea>
-        <button id="sendBtn" style="width:100%; text-align:center; background:dodgerblue">Review Selected Code</button>
+            <html lang="en">
+              <head>
+                <meta charset="UTF-8" />
+                <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                <title>Extension Sidebar</title>
+              </head>
+              <body>
+                <h3>Custom Coding Standards(if any):</h3>
+                <textarea id="inputText" style="width: 100%; height: 100px"></textarea>
+                <button
+                  id="sendBtn"
+                  style="width: 100%; text-align: center; background: dodgerblue"
+                >
+                  Review Selected Code
+                </button>
 
-        <div id="markdownContent" style="margin-top: 20px;"></div>
+                <div id="markdownContent" style="margin-top: 20px"></div>
+                <!-- Import Marked.js to parse markdown to HTML -->
+                <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+                <script>
+                  const vscode = acquireVsCodeApi();
 
-        <script>
-          const vscode = acquireVsCodeApi();
-          
-          document.getElementById('sendBtn').addEventListener('click', () => {
-            const userDefinedCodingStandards = document.getElementById('inputText').value;
-            vscode.postMessage({ command: 'reviewCode', userDefinedCodingStandards });
-          });
+                  // Load previously saved state, if any
+                  const previousState = vscode.getState();
+                  if (previousState) {
+                    document.getElementById("inputText").value =
+                      previousState.userDefinedCodingStandards || "";
+                    document.getElementById("markdownContent").innerHTML =
+                      marked.parse(previousState.markdown) || "";
+                  }
 
-          window.addEventListener('message', event => {
-            const message = event.data;
-            if (message.command === 'showMarkdown') {
-              // Use simple rendering for markdown
-              document.getElementById('markdownContent').innerHTML = marked.parse(message.markdown);
-            }
-          });
-        </script>
+                  document.getElementById("sendBtn").addEventListener("click", () => {
+                    const userDefinedCodingStandards =
+                      document.getElementById("inputText").value;
+                    vscode.postMessage({
+                      command: "reviewCode",
+                      userDefinedCodingStandards,
+                    });
 
-        <!-- Import Marked.js to parse markdown to HTML -->
-        <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-      </body>
-      </html>`;
+                    // Save the user input state
+                    vscode.setState({ userDefinedCodingStandards });
+                  });
+
+                  window.addEventListener("message", (event) => {
+                    const message = event.data;
+                    if (message.command === "showMarkdown") {
+                      document.getElementById("markdownContent").innerHTML = marked.parse(
+                        message.markdown
+                      );
+
+                      // Save the markdown content state
+                      vscode.setState({
+                        userDefinedCodingStandards:
+                          document.getElementById("inputText").value,
+                        markdown: message.markdown,
+                      });
+                    }
+                  });
+                </script>
+              </body>
+            </html>
+            `;
   }
 
   dispose() {
@@ -140,10 +171,10 @@ class SidebarProvider {
 }
 
 async function getReviewSuggestions(code, userDefinedCodingStandards) {
-    if(code == ''){
-        return "Please Select some code"
-    }
-  const standardsDescription = userDefinedCodingStandards
+  if (code == "") {
+    return "Please Select some code";
+  }
+  const standardsDescription = userDefinedCodingStandards;
 
   const generalStandardsDescription = `
 	  In addition to the user-defined standards, please consider the following general coding best practices:
@@ -193,7 +224,7 @@ async function getReviewSuggestions(code, userDefinedCodingStandards) {
   };
 
   const response = await callGenAi(messages, options);
-//   vscode.window.showInformationMessage(response, { modal: true });
+  //   vscode.window.showInformationMessage(response, { modal: true });
   return response;
 }
 
