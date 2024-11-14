@@ -8,82 +8,142 @@ const fetch = async (...args) => {
 
 // @ts-ignore
 global.fetch = fetch;
-
 let GPT4js = "";
-const codingStandards = vscode.workspace
-  .getConfiguration("genAiCodeReview")
-  .get("codingStandards");
 
+function activate(context) {
+  // Register a command to open the sidebar with input and button
+  const commandId = "extension.openSidebar";
+  context.subscriptions.push(
+    vscode.commands.registerCommand(commandId, () => {
+      SidebarProvider.createOrShow(context.extensionUri);
+    })
+  );
 
-  function activate(context) {
-	const reviewCodeCommand = vscode.commands.registerCommand("extension.reviewCode", async () => {
-	  const editor = vscode.window.activeTextEditor;
-	  if (!editor) return;
-  
-	  const selection = editor.selection;
-	  const code = editor.document.getText(selection);
-  
-	  const codingStandards = vscode.workspace
-		.getConfiguration("genAiCodeReview")
-		.get("codingStandards");
-  
-	  // Show progress when generating review suggestions
-	  vscode.window.withProgress(
-		{
-		  location: vscode.ProgressLocation.Window,
-		  title: "Reviewing code...",
-		  cancellable: false,
-		},
-		async (progress) => {
-		  progress.report({ increment: 0 });
-		  
-		  const suggestions = await getReviewSuggestions(code, codingStandards);
-		  
-		  progress.report({ increment: 100 });
-  
-		  showSuggestionsInNewFile(suggestions);
-		}
-	  );
-	});
-  
-	// Create a tree view provider with a single "Run Code Review" button
-	const reviewProvider = new ReviewProvider();
-	vscode.window.registerTreeDataProvider("reviewAiView", reviewProvider);
-  
-	context.subscriptions.push(reviewCodeCommand);
-  }
-  
-  class ReviewProvider {
-	getTreeItem(element) {
-	  return element;
-	}
-  
-	getChildren() {
-	  return [
-		new vscode.TreeItem(
-		  "Run Code Review",
-		  vscode.TreeItemCollapsibleState.None
-		)
-	  ];
-	}
-  
-	// Define the action for the button click
-	resolveTreeItem(item) {
-	  item.command = {
-		command: "extension.reviewCode",
-		title: "Run Code Review"
-	  };
-	  return item;
-	}
+  context.subscriptions.push(SidebarProvider.register(context.extensionUri));
+}
+
+class SidebarProvider {
+  static currentPanel = undefined;
+
+  static register(extensionUri) {
+    const provider = new SidebarProvider(extensionUri);
+    return vscode.window.registerWebviewViewProvider(
+      "extension.sidebar",
+      provider
+    );
   }
 
-async function getReviewSuggestions(code, codingStandards) {
-  const standardsDescription = `
-	  - Function names should be in ${codingStandards.functionNamingConvention}.
-	  - Each line should end with a semicolon: ${codingStandards.endWithSemicolon}.
-	  - Avoid magic numbers: ${codingStandards.noMagicNumbers}.
-	  - Avoid hardcoded strings: ${codingStandards.noHardcodedStrings}.
-	`;
+  constructor(extensionUri) {
+    this.extensionUri = extensionUri;
+  }
+
+  static createOrShow(extensionUri) {
+    if (SidebarProvider.currentPanel) {
+      SidebarProvider.currentPanel.reveal(vscode.ViewColumn.One);
+    } else {
+      SidebarProvider.currentPanel = new SidebarProvider(extensionUri);
+    }
+  }
+
+  resolveWebviewView(webviewView) {
+    this.webviewView = webviewView;
+    webviewView.webview.options = {
+      enableScripts: true,
+    };
+
+    webviewView.webview.html = this.getHtmlForWebview(webviewView.webview);
+
+    webviewView.webview.onDidReceiveMessage(
+      async (message) => {
+        if (message.command === "reviewCode") {
+          const code = vscode.window.activeTextEditor
+            ? vscode.window.activeTextEditor.document.getText(
+                vscode.window.activeTextEditor.selection
+              )
+            : "";
+
+          const userDefinedCodingStandards = message.userDefinedCodingStandards;
+
+          vscode.window.showInformationMessage(
+            `Input Text: ${userDefinedCodingStandards}\nSelected Code: ${code}`
+          );
+          vscode.window.withProgress(
+            {
+              location: vscode.ProgressLocation.Window,
+              title: "Reviewing code...",
+              cancellable: false,
+            },
+            async (progress) => {
+              progress.report({ increment: 0 });
+
+              const suggestions = await getReviewSuggestions(
+                code,
+                userDefinedCodingStandards
+              );
+
+              progress.report({ increment: 100 });
+
+              showSuggestionsInNewFile(suggestions);
+			  this.webviewView.webview.postMessage({ command: 'showMarkdown', markdown: suggestions });
+            }
+          );
+          // Here you can process or send `inputText` and `selectedText`
+        }
+      },
+      undefined,
+      // @ts-ignore
+      this._disposables
+    );
+  }
+
+  getHtmlForWebview(webview) {
+    return `<!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Extension Sidebar</title>
+      </head>
+      <body>
+        <h3>Custom Coding Standards(if any):</h3>
+        <textarea id="inputText" style="width:100%; height:100px;"></textarea>
+        <button id="sendBtn" style="width:100%; text-align:center; background:dodgerblue">Review Selected Code</button>
+
+        <div id="markdownContent" style="margin-top: 20px;"></div>
+
+        <script>
+          const vscode = acquireVsCodeApi();
+          
+          document.getElementById('sendBtn').addEventListener('click', () => {
+            const userDefinedCodingStandards = document.getElementById('inputText').value;
+            vscode.postMessage({ command: 'reviewCode', userDefinedCodingStandards });
+          });
+
+          window.addEventListener('message', event => {
+            const message = event.data;
+            if (message.command === 'showMarkdown') {
+              // Use simple rendering for markdown
+              document.getElementById('markdownContent').innerHTML = marked.parse(message.markdown);
+            }
+          });
+        </script>
+
+        <!-- Import Marked.js to parse markdown to HTML -->
+        <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+      </body>
+      </html>`;
+  }
+
+  dispose() {
+    SidebarProvider.currentPanel = undefined;
+  }
+}
+
+async function getReviewSuggestions(code, userDefinedCodingStandards) {
+    if(code == ''){
+        return "Please Select some code"
+    }
+  const standardsDescription = userDefinedCodingStandards
 
   const generalStandardsDescription = `
 	  In addition to the user-defined standards, please consider the following general coding best practices:
@@ -123,8 +183,7 @@ async function getReviewSuggestions(code, codingStandards) {
 		Provide an optimized version of the code incorporating the review points above, if necessary.
 
 		If no suggestions or optimizations are needed, return: "No suggestions or optimizations required." Indicate that the code is correct in such a case.
-		
-		Important: Return the response in plain text format only, without any Markdown or special formatting.`,
+		`,
     },
   ];
 
@@ -134,7 +193,7 @@ async function getReviewSuggestions(code, codingStandards) {
   };
 
   const response = await callGenAi(messages, options);
-  vscode.window.showInformationMessage(response, { modal: true });
+//   vscode.window.showInformationMessage(response, { modal: true });
   return response;
 }
 
@@ -148,7 +207,9 @@ function showSuggestionsInNewFile(suggestions) {
 // Your extension is activated the very first time the command is executed
 
 async function callGenAi(messages, options) {
-  GPT4js = await getGPT4js();
+  if (GPT4js == "") {
+    GPT4js = await getGPT4js();
+  }
   // @ts-ignore
   const provider = GPT4js.createProvider(options.provider);
   try {
@@ -162,7 +223,6 @@ async function callGenAi(messages, options) {
   }
 }
 
-// This method is called when your extension is deactivated
 function deactivate() {}
 
 module.exports = {

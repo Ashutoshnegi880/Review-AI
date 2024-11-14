@@ -11,47 +11,36 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
   "main": "./extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "extension",
+          "title": "Extension",
+          "icon": "images/review-ai-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "extension": [
+        {
+          "type": "webview",
+          "id": "extension.sidebar",
+          "name": "Extension Sidebar"
+        }
+      ]
+    },
     "commands": [
       {
-        "command": "extension.reviewCode",
-        "title": "Review Selected Code"
-      }
-    ],
-    "configuration": {
-      "properties": {
-        "genAiCodeReview.codingStandards": {
-          "type": "string",
-          "default": {
-            "functionNamingConvention": "PascalCase",
-            "endWithSemicolon": true,
-            "noMagicNumbers": true,
-            "noHardcodedStrings": true
-          },
-          "description": "Your custom coding standards for code review."
-        }
-      }
-    },
-    "viewsContainers": {
-    "activitybar": [
-      {
-        "id": "reviewAiSidebar",
-        "title": "Review AI",
-        "icon": "images/review-ai-icon.svg"
+        "command": "extension.openSidebar",
+        "title": "Open Extension Sidebar"
       }
     ]
   },
-  "views": {
-    "reviewAiSidebar": [
-      {
-        "id": "reviewAiView",
-        "name": "Code Review"
-      }
-    ]
-  }
-  },
+  "activationEvents": [
+    "onCommand:extension.openSidebar"
+  ],
   "scripts": {
     "lint": "eslint .",
     "pretest": "npm run lint",
