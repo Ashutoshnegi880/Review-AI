@@ -4,7 +4,7 @@
   "description": "Select the piece of code and use genAI to review to the code and get suggestion.",
   "publisher": "AshutoshSinghNegi",
   "icon": "images/review-ai-icon.png",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "engines": {
     "vscode": "^1.95.0"
   },
